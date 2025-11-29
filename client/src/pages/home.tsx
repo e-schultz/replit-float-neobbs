@@ -3,9 +3,10 @@ import { TerminalLayout } from "@/components/layout/terminal-layout";
 import { CommandBar } from "@/components/terminal/command-bar";
 import { StatusPanel } from "@/components/terminal/status-panel";
 import { AsciiHeader } from "@/components/terminal/ascii-header";
+import { PostEditor } from "@/components/terminal/post-editor";
 import { TerminalText } from "@/components/ui/terminal-text";
 import { motion, AnimatePresence } from "framer-motion";
-import { FileText, Folder, Lock, AlertTriangle, X, Maximize2 } from "lucide-react";
+import { FileText, Folder, Lock, AlertTriangle, X, Maximize2, Inbox, Mail, MessageSquare, Eye } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -26,6 +27,16 @@ interface FileEntry {
   size?: string;
   date: string;
   content?: string;
+  preview?: string;
+}
+
+interface MessageEntry {
+  id: string;
+  from: string;
+  subject: string;
+  date: string;
+  unread: boolean;
+  content: string;
 }
 
 // Mock Data
@@ -43,6 +54,7 @@ const FILES: FileEntry[] = [
     type: "file", 
     size: "2KB", 
     date: "2025-11-28",
+    preview: "WELCOME TO FLOAT BBS - SYSTEM RULES",
     content: "WELCOME TO FLOAT BBS\n\nThis system is a living archive of the void. \n\nRules:\n1. Observe protocol.\n2. Do not feed the glitches.\n3. Encryption keys rotate hourly.\n\nEnjoy your stay."
   },
   { 
@@ -51,7 +63,17 @@ const FILES: FileEntry[] = [
     type: "file", 
     size: "14KB", 
     date: "2025-11-20",
+    preview: "# THE HOLDING ARCHITECTURE",
     content: "# THE HOLDING ARCHITECTURE\n\nWe are not building a platform. We are building a place.\n\nThe void is not empty. It is heavy with care.\n\nWhat falls into the void does not disappear.\nWhat falls into the void is held."
+  },
+  {
+    id: "99",
+    name: "canvas-99-lore.md",
+    type: "file",
+    size: "86KB",
+    date: "2025-11-29",
+    preview: "Subject: The Goat Incident (Classified)",
+    content: "# THE GOAT INCIDENT [CLASSIFIED]\n\nDate: 2025-11-28\nObserver: Sysop\n\nSummary:\nA digital entity resembling a goat breached the containment protocols of Sector 4. Instead of deletion, the entity began consuming glitch artifacts and converting them into valid lore fragments.\n\nSignificance:\nThis suggests the void is capable of spontaneous generation of benevolent fauna. We are calling it 'The Cleaner'. Do not interfere with its grazing patterns."
   },
   { id: "3", name: "archives", type: "folder", date: "2025-10-15" },
   { id: "4", name: "projects", type: "folder", date: "2025-11-01" },
@@ -59,12 +81,41 @@ const FILES: FileEntry[] = [
   { id: "6", name: "glitch_logs.dat", type: "file", size: "45MB", date: "2025-11-27", locked: true },
 ];
 
-const COMMANDS = ["help", "clear", "files", "status", "feed", "login", "echo", "open"];
+const MESSAGES: MessageEntry[] = [
+  {
+    id: "1",
+    from: "SYSOP",
+    subject: "Welcome to the Void",
+    date: "2025-11-29",
+    unread: true,
+    content: "Welcome traveler. You have successfully connected to the Float BBS node. Please familiarize yourself with the local commands."
+  },
+  {
+    id: "2",
+    from: "The_Cleaner",
+    subject: "Bleat.",
+    date: "2025-11-28",
+    unread: true,
+    content: "*chewing sounds* ... [Attachment: glitch_fragment_04.dat]"
+  },
+  {
+    id: "3",
+    from: "Archive_Bot",
+    subject: "Weekly Digest",
+    date: "2025-11-25",
+    unread: false,
+    content: "44 new lore entries archived. 2 security incidents logged. 1 goat spotted."
+  }
+];
+
+const COMMANDS = ["help", "clear", "files", "status", "feed", "login", "echo", "open", "inbox", "post", "read"];
 
 export default function Home() {
   const [logs, setLogs] = useState<LogEntry[]>(INITIAL_LOGS);
-  const [activeTab, setActiveTab] = useState<"feed" | "files">("feed");
+  const [activeTab, setActiveTab] = useState<"feed" | "files" | "inbox">("feed");
   const [viewingFile, setViewingFile] = useState<FileEntry | null>(null);
+  const [readingMessage, setReadingMessage] = useState<MessageEntry | null>(null);
+  const [isPostEditorOpen, setIsPostEditorOpen] = useState(false);
   const { toast } = useToast();
 
   // Keyboard Shortcuts
@@ -72,16 +123,21 @@ export default function Home() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.altKey && e.key === "1") setActiveTab("feed");
       if (e.altKey && e.key === "2") setActiveTab("files");
-      if (e.key === "Escape" && viewingFile) setViewingFile(null);
+      if (e.altKey && e.key === "3") setActiveTab("inbox");
+      if (e.key === "Escape") {
+        setViewingFile(null);
+        setReadingMessage(null);
+        setIsPostEditorOpen(false);
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [viewingFile]);
+  }, [viewingFile, readingMessage, isPostEditorOpen]);
 
   // Live Logs Simulation
   useEffect(() => {
     const interval = setInterval(() => {
-      if (Math.random() > 0.7) {
+      if (Math.random() > 0.85) { // Slowed down slightly
         const messages = [
           "Packet intercepted from external node",
           "Memory heap optimization complete",
@@ -102,6 +158,15 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
+  const addLog = (msg: string, level: LogEntry["level"] = "SYSTEM") => {
+    setLogs(prev => [{
+      id: Date.now().toString(),
+      timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
+      level,
+      message: msg
+    }, ...prev]);
+  };
+
   const handleFileClick = (file: FileEntry) => {
     if (file.locked) {
       toast({
@@ -119,6 +184,23 @@ export default function Home() {
       return;
     }
     setViewingFile(file);
+    addLog(`Reading file: ${file.name}...`);
+  };
+
+  const handleMessageClick = (msg: MessageEntry) => {
+    setReadingMessage(msg);
+    addLog(`Opening message from ${msg.from}...`);
+  };
+
+  const handlePostSubmit = (content: string) => {
+    addLog(`Transmitting payload (${content.length} bytes)...`, "INFO");
+    setTimeout(() => {
+      addLog("Transmission successful.", "SYSTEM");
+      toast({
+        title: "Transmission Sent",
+        description: "Your message has been added to the local buffer.",
+      });
+    }, 800);
   };
 
   const handleCommand = (cmd: string) => {
@@ -126,20 +208,11 @@ export default function Home() {
     const command = parts[0].toLowerCase();
     const args = parts.slice(1).join(" ");
     
-    const addLog = (msg: string, level: LogEntry["level"] = "SYSTEM") => {
-      setLogs(prev => [{
-        id: Date.now().toString(),
-        timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
-        level,
-        message: msg
-      }, ...prev]);
-    };
-
     addLog(`> ${cmd}`);
 
     switch (command) {
       case "help":
-        addLog("Available commands: help, clear, files, status, feed, open [filename], echo [msg]");
+        addLog("Commands: help, clear, files, status, feed, inbox, post, open [file], read [id]");
         break;
       case "clear":
         setLogs([]);
@@ -154,6 +227,16 @@ export default function Home() {
         setActiveTab("feed");
         addLog("Switched to System Feed");
         break;
+      case "inbox":
+      case "mail":
+        setActiveTab("inbox");
+        addLog("Checking encrypted inbox...");
+        break;
+      case "post":
+      case "write":
+        setIsPostEditorOpen(true);
+        addLog("Initializing composer...");
+        break;
       case "open":
         if (!args) {
           addLog("Usage: open [filename]", "WARN");
@@ -161,7 +244,6 @@ export default function Home() {
           const file = FILES.find(f => f.name.toLowerCase() === args.toLowerCase());
           if (file) {
             handleFileClick(file);
-            addLog(`Opening ${file.name}...`);
           } else {
             addLog(`File not found: ${args}`, "ERROR");
           }
@@ -188,21 +270,24 @@ export default function Home() {
         <AsciiHeader />
 
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-1 mb-4 border-b border-border pb-2 shrink-0">
+        <div className="flex items-center gap-1 mb-4 border-b border-border pb-2 shrink-0 overflow-x-auto">
           <TabButton active={activeTab === "feed"} onClick={() => setActiveTab("feed")}>
-            LIVE_FEED <span className="text-[10px] text-muted-foreground ml-1 font-normal">[ALT+1]</span>
+            FEED <span className="text-[10px] text-muted-foreground ml-1 font-normal hidden sm:inline">[ALT+1]</span>
           </TabButton>
           <TabButton active={activeTab === "files"} onClick={() => setActiveTab("files")}>
-            DIRECTORY <span className="text-[10px] text-muted-foreground ml-1 font-normal">[ALT+2]</span>
+            FILES <span className="text-[10px] text-muted-foreground ml-1 font-normal hidden sm:inline">[ALT+2]</span>
           </TabButton>
-          <TabButton active={false} onClick={() => toast({ title: "Access Denied", description: "You do not have clearance for this sector." })}>
-            RESTRICTED
+          <TabButton active={activeTab === "inbox"} onClick={() => setActiveTab("inbox")}>
+            INBOX <span className="text-[10px] text-muted-foreground ml-1 font-normal hidden sm:inline">[ALT+3]</span>
+          </TabButton>
+          <TabButton active={false} onClick={() => setIsPostEditorOpen(true)} className="ml-auto text-secondary border-secondary/30 hover:bg-secondary/10">
+            <span className="flex items-center gap-2"><MessageSquare className="w-3 h-3" /> POST</span>
           </TabButton>
         </div>
 
         {/* Content Area */}
         <div className="flex-1 min-h-0 relative bg-card/20 border border-border/50 backdrop-blur-sm overflow-hidden flex flex-col">
-          <div className="absolute top-0 right-0 p-2 opacity-50 pointer-events-none">
+          <div className="absolute top-0 right-0 p-2 opacity-50 pointer-events-none z-10">
             <div className="w-3 h-3 bg-primary animate-pulse rounded-full" />
           </div>
 
@@ -255,11 +340,11 @@ export default function Home() {
                     key={file.id}
                     onClick={() => handleFileClick(file)}
                     className={cn(
-                      "border border-border p-4 hover:bg-primary/5 hover:border-primary transition-all cursor-pointer group relative overflow-hidden",
+                      "border border-border p-4 hover:bg-primary/5 hover:border-primary transition-all cursor-pointer group relative overflow-hidden flex flex-col gap-2",
                       file.locked && "opacity-60 hover:border-destructive hover:bg-destructive/5"
                     )}
                   >
-                    <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-start justify-between">
                       {file.type === "folder" ? (
                         <Folder className={cn("w-8 h-8", file.locked ? "text-destructive" : "text-accent")} />
                       ) : (
@@ -267,10 +352,17 @@ export default function Home() {
                       )}
                       {file.locked && <Lock className="w-4 h-4 text-destructive" />}
                     </div>
-                    <div className="font-bold text-lg truncate mb-1 group-hover:text-primary transition-colors">
-                      {file.name}
+                    <div>
+                      <div className="font-bold text-lg truncate group-hover:text-primary transition-colors">
+                        {file.name}
+                      </div>
+                      {file.preview && (
+                         <div className="text-xs text-muted-foreground mt-1 italic truncate opacity-70 group-hover:opacity-100">
+                           "{file.preview}"
+                         </div>
+                      )}
                     </div>
-                    <div className="flex justify-between text-xs text-muted-foreground">
+                    <div className="flex justify-between text-xs text-muted-foreground mt-auto pt-2 border-t border-border/30">
                       <span>{file.date}</span>
                       {file.size && <span>{file.size}</span>}
                     </div>
@@ -281,6 +373,41 @@ export default function Home() {
                 ))}
               </div>
             </ScrollArea>
+          )}
+
+          {activeTab === "inbox" && (
+             <ScrollArea className="flex-1 p-4 font-mono">
+               <div className="space-y-2">
+                 {MESSAGES.map((msg) => (
+                   <div 
+                     key={msg.id}
+                     onClick={() => handleMessageClick(msg)}
+                     className={cn(
+                       "border p-3 hover:bg-secondary/5 transition-all cursor-pointer group flex items-center gap-4",
+                       msg.unread ? "border-secondary bg-secondary/5" : "border-border opacity-70"
+                     )}
+                   >
+                     <div className={cn("p-2 rounded-full", msg.unread ? "bg-secondary/20 text-secondary" : "bg-muted text-muted-foreground")}>
+                       {msg.unread ? <Mail className="w-4 h-4" /> : <Inbox className="w-4 h-4" />}
+                     </div>
+                     <div className="flex-1 min-w-0">
+                       <div className="flex justify-between items-center mb-1">
+                         <span className={cn("font-bold truncate", msg.unread ? "text-secondary" : "text-foreground")}>
+                           {msg.from}
+                         </span>
+                         <span className="text-xs text-muted-foreground whitespace-nowrap">{msg.date}</span>
+                       </div>
+                       <div className="text-sm truncate text-foreground/80 group-hover:text-foreground">
+                         {msg.subject}
+                       </div>
+                     </div>
+                     <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Eye className="w-4 h-4 text-muted-foreground" />
+                     </div>
+                   </div>
+                 ))}
+               </div>
+             </ScrollArea>
           )}
         </div>
 
@@ -308,9 +435,6 @@ export default function Home() {
                   <span className="font-bold text-primary tracking-wider">{viewingFile.name.toUpperCase()}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                   <button onClick={() => setViewingFile(null)} className="hover:text-primary hover:bg-primary/20 p-1 rounded transition-colors">
-                    <Maximize2 className="w-4 h-4" />
-                  </button>
                   <button onClick={() => setViewingFile(null)} className="hover:text-destructive hover:bg-destructive/20 p-1 rounded transition-colors">
                     <X className="w-4 h-4" />
                   </button>
@@ -330,18 +454,66 @@ export default function Home() {
         )}
       </AnimatePresence>
 
+      {/* Message Reader Modal */}
+      <AnimatePresence>
+        {readingMessage && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="w-full max-w-2xl bg-card border border-secondary shadow-[0_0_30px_rgba(255,107,53,0.15)] relative flex flex-col max-h-[80vh]"
+            >
+              <div className="flex items-center justify-between p-3 border-b border-secondary/30 bg-secondary/10">
+                <div className="flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-secondary" />
+                  <span className="font-bold text-secondary tracking-wider">INBOX // READ</span>
+                </div>
+                <button onClick={() => setReadingMessage(null)} className="hover:text-destructive hover:bg-destructive/20 p-1 rounded transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              
+              <div className="p-4 border-b border-border/30 bg-card/30 space-y-2">
+                <div className="flex justify-between items-baseline">
+                  <span className="font-bold text-lg text-foreground">{readingMessage.subject}</span>
+                  <span className="text-xs text-muted-foreground">{readingMessage.date}</span>
+                </div>
+                <div className="text-sm text-secondary">From: {readingMessage.from}</div>
+              </div>
+
+              <ScrollArea className="flex-1 p-6 font-mono text-sm leading-relaxed whitespace-pre-wrap">
+                {readingMessage.content}
+              </ScrollArea>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Post Editor Modal */}
+      <AnimatePresence>
+        {isPostEditorOpen && (
+          <PostEditor 
+            isOpen={isPostEditorOpen} 
+            onClose={() => setIsPostEditorOpen(false)}
+            onSubmit={handlePostSubmit}
+          />
+        )}
+      </AnimatePresence>
+
     </TerminalLayout>
   );
 }
 
-const TabButton = ({ children, active, onClick }: { children: React.ReactNode; active: boolean; onClick: () => void }) => (
+const TabButton = ({ children, active, onClick, className }: { children: React.ReactNode; active: boolean; onClick: () => void; className?: string }) => (
   <button
     onClick={onClick}
     className={cn(
-      "px-4 py-2 text-sm font-bold border-t-2 transition-all relative overflow-hidden group",
+      "px-4 py-2 text-sm font-bold border-t-2 transition-all relative overflow-hidden group whitespace-nowrap",
       active 
         ? "border-primary text-primary bg-primary/10" 
-        : "border-transparent text-muted-foreground hover:text-foreground hover:bg-white/5"
+        : "border-transparent text-muted-foreground hover:text-foreground hover:bg-white/5",
+      className
     )}
   >
     <span className="relative z-10">{children}</span>
