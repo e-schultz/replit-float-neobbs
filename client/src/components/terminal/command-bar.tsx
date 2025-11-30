@@ -16,8 +16,14 @@ export const CommandBar = ({ onCommand, suggestions = [] }: CommandBarProps) => 
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Focus on any key press unless we're in an input or using modifiers
-      if (document.activeElement !== inputRef.current && !e.metaKey && !e.ctrlKey && !e.altKey && e.key.length === 1) {
+      // Don't steal focus if user is typing in another input/textarea
+      const activeElement = document.activeElement;
+      const isInInput = activeElement instanceof HTMLInputElement || 
+                        activeElement instanceof HTMLTextAreaElement ||
+                        activeElement?.closest('[role="dialog"]');
+      
+      // Focus on any key press unless we're in an input, using modifiers, or in a modal
+      if (!isInInput && document.activeElement !== inputRef.current && !e.metaKey && !e.ctrlKey && !e.altKey && e.key.length === 1) {
         inputRef.current?.focus();
       }
     };
