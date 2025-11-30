@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Command, CornerDownLeft, ChevronsRight } from "lucide-react";
+import { CornerDownLeft, ChevronsRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
