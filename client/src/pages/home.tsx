@@ -7,27 +7,34 @@ import { PostEditor } from "@/components/terminal/post-editor";
 import { TerminalText } from "@/components/ui/terminal-text";
 import { TabButton } from "@/components/ui/tab-button";
 import { motion, AnimatePresence } from "framer-motion";
-import { FileText, Folder, Lock, AlertTriangle, X, Maximize2, Inbox, Mail, MessageSquare, Eye } from "lucide-react";
+import { FileText, Folder, Lock, AlertTriangle, X, Inbox, Mail, MessageSquare, Eye } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { LogEntry, FileEntry, MessageEntry } from "@/types/terminal";
-import { INITIAL_LOGS, INITIAL_CONTEXT_STREAM, FILES, MESSAGES, COMMANDS } from "@/data/mock-data";
+import { FileEntry, MessageEntry } from "@/types/terminal";
+import { COMMANDS } from "@/data/mock-data";
+import { useLogs, useFiles, useMessages, useCreateLog, useCreateContextChirp, useCreatePost, useMarkMessageAsRead, useContextChirps } from "@/hooks/use-terminal-data";
 
 export default function Home() {
-  const [logs, setLogs] = useState<LogEntry[]>(INITIAL_LOGS);
-  const [contextStream, setContextStream] = useState<string[]>(INITIAL_CONTEXT_STREAM);
   const [activeTab, setActiveTab] = useState<"feed" | "files" | "inbox">("feed");
   const [viewingFile, setViewingFile] = useState<FileEntry | null>(null);
   const [readingMessage, setReadingMessage] = useState<MessageEntry | null>(null);
   const [isPostEditorOpen, setIsPostEditorOpen] = useState(false);
   const { toast } = useToast();
 
+  // React Query hooks
+  const { data: logs = [], isLoading: logsLoading } = useLogs();
+  const { data: files = [], isLoading: filesLoading } = useFiles();
+  const { data: messages = [], isLoading: messagesLoading } = useMessages();
+  const { data: contextChirps = [] } = useContextChirps();
+  const createLogMutation = useCreateLog();
+  const createChirpMutation = useCreateContextChirp();
+  const createPostMutation = useCreatePost();
+  const markAsReadMutation = useMarkMessageAsRead();
+
   // Helper to log user actions as context chirps
   const logContext = (action: string) => {
-    const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
-    const chirp = `ctx::${action} @ ${timestamp}`;
-    setContextStream(prev => [chirp, ...prev].slice(0, 20));
+    createChirpMutation.mutate(action);
     
     // Occasionally trigger Evna enrichment based on context
     if (Math.random() > 0.7) {
@@ -63,42 +70,10 @@ export default function Home() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [viewingFile, readingMessage, isPostEditorOpen]);
+  }, [viewingFile, readingMessage]);
 
-  // Live Logs Simulation
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (Math.random() > 0.85) { // Slowed down slightly
-        const messages = [
-          "Packet intercepted from external node",
-          "Memory heap optimization complete",
-          "Scanning frequency range 20-20000Hz",
-          "User query processing...",
-          "Cache invalidated",
-          "Re-indexing sector 4",
-          "Karen: Updating manifest for sector 7",
-          "Evna: AutoRAG sync complete (12 tokens)",
-          "Chirp received: ctx::debug mode active"
-        ];
-        const newLog: LogEntry = {
-          id: Date.now().toString(),
-          timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
-          level: "INFO",
-          message: messages[Math.floor(Math.random() * messages.length)]
-        };
-        setLogs(prev => [newLog, ...prev].slice(0, 50));
-      }
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const addLog = (msg: string, level: LogEntry["level"] = "SYSTEM") => {
-    setLogs(prev => [{
-      id: Date.now().toString(),
-      timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
-      level,
-      message: msg
-    }, ...prev]);
+  const addLog = (msg: string, level: string = "SYSTEM") => {
+    createLogMutation.mutate({ level, message: msg });
   };
 
   const handleFileClick = (file: FileEntry) => {
@@ -128,10 +103,17 @@ export default function Home() {
     setReadingMessage(msg);
     addLog(`Opening message from ${msg.from}...`);
     logContext(`opened::message(${msg.id})_from(${msg.from})`);
+    
+    // Mark as read
+    if (msg.unread) {
+      markAsReadMutation.mutate(msg.id);
+    }
   };
 
   const handlePostSubmit = (content: string) => {
     const isChirp = content.startsWith("ctx::") || content.startsWith("mode::") || content.startsWith("project::");
+    
+    createPostMutation.mutate({ content, isChirp });
     
     if (isChirp) {
         addLog(`Chirp received. Seeding context...`, "INFO");
@@ -148,7 +130,7 @@ export default function Home() {
         logContext(`request::submitted`);
         setTimeout(() => {
             // Simulate Evna using the context stream
-            const contextSummary = contextStream.slice(0, 3).map(c => c.split('::')[1].split('@')[0].trim()).join(', ');
+            const contextSummary = contextChirps.slice(0, 3).map(c => c.action.split('_')[0]).join(', ');
             addLog(`Karen: Response shaped by recent activity: [${contextSummary || "none"}]`, "SYSTEM");
             toast({
               title: "Request Processed",
@@ -181,7 +163,10 @@ export default function Home() {
         addLog("Commands: help, clear, files, status, feed, inbox, post, open [file], read [id], ctx::[msg]");
         break;
       case "clear":
-        setLogs([]);
+        toast({
+          title: "Clear Logs",
+          description: "Cannot clear persistent logs. Use feed filters instead.",
+        });
         break;
       case "files":
       case "ls":
@@ -207,7 +192,7 @@ export default function Home() {
         if (!args) {
           addLog("Usage: open [filename]", "WARN");
         } else {
-          const file = FILES.find(f => f.name.toLowerCase() === args.toLowerCase());
+          const file = files.find(f => f.name.toLowerCase() === args.toLowerCase());
           if (file) {
             handleFileClick(file);
           } else {
@@ -280,7 +265,7 @@ export default function Home() {
                       className="flex items-start gap-3 group hover:bg-white/5 p-1 rounded transition-colors"
                     >
                       <span className="text-muted-foreground shrink-0 text-xs mt-1 select-none">
-                        [{log.timestamp}]
+                        [{new Date(log.timestamp).toLocaleTimeString('en-US', { hour12: false })}]
                       </span>
                       <span className={cn(
                         "text-xs font-bold px-1 rounded shrink-0 w-16 text-center select-none mt-0.5",
@@ -301,8 +286,11 @@ export default function Home() {
 
           {activeTab === "files" && (
             <ScrollArea className="flex-1 p-4 font-mono">
+              {filesLoading ? (
+                <div className="text-center py-8 text-muted-foreground">Loading files...</div>
+              ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {FILES.map((file) => (
+                {files.map((file) => (
                   <div 
                     key={file.id}
                     onClick={() => handleFileClick(file)}
@@ -339,13 +327,17 @@ export default function Home() {
                   </div>
                 ))}
               </div>
+              )}
             </ScrollArea>
           )}
 
           {activeTab === "inbox" && (
              <ScrollArea className="flex-1 p-4 font-mono">
+               {messagesLoading ? (
+                 <div className="text-center py-8 text-muted-foreground">Loading messages...</div>
+               ) : (
                <div className="space-y-2">
-                 {MESSAGES.map((msg) => (
+                 {messages.map((msg) => (
                    <div 
                      key={msg.id}
                      onClick={() => handleMessageClick(msg)}
@@ -374,6 +366,7 @@ export default function Home() {
                    </div>
                  ))}
                </div>
+               )}
              </ScrollArea>
           )}
         </div>

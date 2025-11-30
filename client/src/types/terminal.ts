@@ -1,26 +1,46 @@
 export interface LogEntry {
-  id: string;
-  timestamp: string;
-  level: "INFO" | "WARN" | "ERROR" | "SYSTEM";
+  id: number;
+  timestamp: Date;
+  level: string;
   message: string;
 }
 
 export interface FileEntry {
-  id: string;
+  id: number;
   name: string;
-  type: "file" | "folder" | "link";
-  locked?: boolean;
-  size?: string;
+  type: string;
+  locked: boolean | null;
+  size: string | null;
   date: string;
-  content?: string;
-  preview?: string;
+  content: string | null;
+  preview: string | null;
 }
 
 export interface MessageEntry {
-  id: string;
+  id: number;
   from: string;
   subject: string;
   date: string;
-  unread: boolean;
+  unread: boolean | null;
   content: string;
 }
+
+export interface PostEntry {
+  id: number;
+  content: string;
+  isChirp: boolean | null;
+  timestamp: Date;
+}
+
+export interface ContextChirpEntry {
+  id: number;
+  action: string;
+  timestamp: Date;
+}
+
+// Type aliases for API compatibility
+export type Log = LogEntry;
+export type File = FileEntry;
+export type Message = MessageEntry;
+export type Post = PostEntry;
+export type ContextChirp = ContextChirpEntry;
