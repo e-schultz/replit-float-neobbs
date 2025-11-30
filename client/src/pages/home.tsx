@@ -47,6 +47,8 @@ const INITIAL_LOGS: LogEntry[] = [
   { id: "4", timestamp: "09:45:00", level: "INFO", message: "Background tasks synchronized" },
 ];
 
+const INITIAL_CONTEXT_STREAM: string[] = [];
+
 const FILES: FileEntry[] = [
   { 
     id: "1", 
@@ -138,19 +140,46 @@ const COMMANDS = ["help", "clear", "files", "status", "feed", "login", "echo", "
 
 export default function Home() {
   const [logs, setLogs] = useState<LogEntry[]>(INITIAL_LOGS);
+  const [contextStream, setContextStream] = useState<string[]>(INITIAL_CONTEXT_STREAM);
   const [activeTab, setActiveTab] = useState<"feed" | "files" | "inbox">("feed");
   const [viewingFile, setViewingFile] = useState<FileEntry | null>(null);
   const [readingMessage, setReadingMessage] = useState<MessageEntry | null>(null);
   const [isPostEditorOpen, setIsPostEditorOpen] = useState(false);
   const { toast } = useToast();
 
+  // Helper to log user actions as context chirps
+  const logContext = (action: string) => {
+    const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
+    const chirp = `ctx::${action} @ ${timestamp}`;
+    setContextStream(prev => [chirp, ...prev].slice(0, 20));
+    
+    // Occasionally trigger Evna enrichment based on context
+    if (Math.random() > 0.7) {
+        setTimeout(() => {
+            const responses = [
+                `Evna: Noting pattern in user activity: [${action}]`,
+                `Evna: Cross-referencing [${action}] with archive...`,
+                `Evna: Updating user vector based on recent navigation.`,
+            ];
+            addLog(responses[Math.floor(Math.random() * responses.length)], "SYSTEM");
+        }, 1500);
+    }
+  };
+
+  const handleTabChange = (tab: "feed" | "files" | "inbox") => {
+    setActiveTab(tab);
+    logContext(`navigated_to::${tab}`);
+  };
+
   // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.altKey && e.key === "1") setActiveTab("feed");
-      if (e.altKey && e.key === "2") setActiveTab("files");
-      if (e.altKey && e.key === "3") setActiveTab("inbox");
+      if (e.altKey && e.key === "1") handleTabChange("feed");
+      if (e.altKey && e.key === "2") handleTabChange("files");
+      if (e.altKey && e.key === "3") handleTabChange("inbox");
       if (e.key === "Escape") {
+        if (viewingFile) logContext(`closed::file(${viewingFile.name})`);
+        if (readingMessage) logContext(`closed::message(${readingMessage.id})`);
         setViewingFile(null);
         setReadingMessage(null);
         setIsPostEditorOpen(false);
@@ -203,6 +232,7 @@ export default function Home() {
         description: "Encrypted file. Decryption key required.",
         variant: "destructive",
       });
+      logContext(`access_denied::file(${file.name})`);
       return;
     }
     if (file.type === "folder") {
@@ -210,15 +240,18 @@ export default function Home() {
         title: "Directory Navigation",
         description: `Entering ${file.name}... (Mock: Empty directory)`,
       });
+      logContext(`navigated::folder(${file.name})`);
       return;
     }
     setViewingFile(file);
     addLog(`Reading file: ${file.name}...`);
+    logContext(`opened::file(${file.name})`);
   };
 
   const handleMessageClick = (msg: MessageEntry) => {
     setReadingMessage(msg);
     addLog(`Opening message from ${msg.from}...`);
+    logContext(`opened::message(${msg.id})_from(${msg.from})`);
   };
 
   const handlePostSubmit = (content: string) => {
@@ -226,6 +259,7 @@ export default function Home() {
     
     if (isChirp) {
         addLog(`Chirp received. Seeding context...`, "INFO");
+        logContext(`chirp::emitted`);
         setTimeout(() => {
             addLog(`Evna: Enrichment started for chirp ${Math.floor(Math.random() * 1000)}`, "SYSTEM");
             toast({
@@ -235,8 +269,11 @@ export default function Home() {
         }, 500);
     } else {
         addLog(`Request received. Harvesting context...`, "INFO");
+        logContext(`request::submitted`);
         setTimeout(() => {
-            addLog("Karen: Response shaped by recent chirp stream.", "SYSTEM");
+            // Simulate Evna using the context stream
+            const contextSummary = contextStream.slice(0, 3).map(c => c.split('::')[1].split('@')[0].trim()).join(', ');
+            addLog(`Karen: Response shaped by recent activity: [${contextSummary || "none"}]`, "SYSTEM");
             toast({
               title: "Request Processed",
               description: "Response generated with active context.",
@@ -251,10 +288,12 @@ export default function Home() {
     const args = parts.slice(1).join(" ");
     
     addLog(`> ${cmd}`);
+    logContext(`exec::${command}`);
 
     // Handle Chirps directly from command bar
     if (cmd.startsWith("ctx::") || cmd.startsWith("project::") || cmd.startsWith("mode::")) {
         addLog(`Chirp logged: ${cmd}`, "INFO");
+        logContext(`chirp::${cmd.substring(0, 20)}...`);
         setTimeout(() => {
             addLog("Evna: Context vector updated.", "SYSTEM");
         }, 300);
@@ -270,17 +309,17 @@ export default function Home() {
         break;
       case "files":
       case "ls":
-        setActiveTab("files");
+        handleTabChange("files");
         addLog("Listing directory contents...");
         break;
       case "status":
       case "feed":
-        setActiveTab("feed");
+        handleTabChange("feed");
         addLog("Switched to System Feed");
         break;
       case "inbox":
       case "mail":
-        setActiveTab("inbox");
+        handleTabChange("inbox");
         addLog("Checking encrypted inbox...");
         break;
       case "post":
@@ -297,6 +336,7 @@ export default function Home() {
             handleFileClick(file);
           } else {
             addLog(`File not found: ${args}`, "ERROR");
+            logContext(`error::file_not_found(${args})`);
           }
         }
         break;
