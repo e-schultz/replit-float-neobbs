@@ -75,6 +75,24 @@ const FILES: FileEntry[] = [
     preview: "Subject: The Goat Incident (Classified)",
     content: "# THE GOAT INCIDENT [CLASSIFIED]\n\nDate: 2025-11-28\nObserver: Sysop\n\nSummary:\nA digital entity resembling a goat breached the containment protocols of Sector 4. Instead of deletion, the entity began consuming glitch artifacts and converting them into valid lore fragments.\n\nSignificance:\nThis suggests the void is capable of spontaneous generation of benevolent fauna. We are calling it 'The Cleaner'. Do not interfere with its grazing patterns."
   },
+  {
+    id: "101",
+    name: "record-shop-arch.md",
+    type: "file",
+    size: "12KB",
+    date: "2025-11-29",
+    preview: "float.dispatch - The Record Shop Architecture",
+    content: "# float.dispatch - The Record Shop Architecture\n\n**ctx:: 2025-11-29 @ 17:01PM**\n**project:: float/techcraft/active-context-redesign**\n\n## The Metaphor\n\nThe team runs a record shop.\n\n**Karen works the front desk.** She’s got the headset on... She knows the *inventory*. She knows where everything *is*. \n\n**Evna’s in the back room.** Past the beaded curtain... She looks up when you come in: “Oh, you’re into that? Okay, so—” and then she’s off.\n\n**Karen knows where things ARE.**\n**Evna knows where things CONNECT.**\n\n## The Manifest / Passenger List Doctrine\n\nKaren doesn’t just know the flight is booked. She knows *who’s on it*.\n\nThe Passenger List Doctrine: **Not just that the work was done, but seeing the result.**\n\n## Summaries Tailored to Context\n\nThe preview text isn’t just truncated content—it’s *Karen’s read* on what matters. If you’ve been deep in pharmacy work all morning, she surfaces the pharmacy-adjacent stuff first."
+  },
+  {
+    id: "102",
+    name: "active-context-proto.md",
+    type: "file",
+    size: "15KB",
+    date: "2025-11-29",
+    preview: "Active Context Protocol - Mirror Anchor Scaffold v1.0",
+    content: "# float.dispatch // Active Context Protocol\n\n**Mirror Anchor Scaffold v1.0**\n\n## §1 The Metaphor: The Record Shop\n\n### Karen @ Front of House (Ingest/Interface)\nROLE: Public-facing I/O, gatekeeper for inbound rituals\nFUNCTION: inventory.know(), manifest.track(), preview.generate()\n\n### Evna @ Back of House (Archival/Orchestration)\nROLE: Backend daemon, slotting fresh context into active streams\nFUNCTION: connections.find(), archaeology.run(), patterns.surface()\n\n## §2 The Chirp vs The Request\n\n### Chirp (Low-Friction Capture)\n- Stream of consciousness\n- Markers present (ctx::, project::, mode::)\n- No response expected\n\n### Request (Formal Query)\n- Explicit ask\n- Expects shaped response\n\n## §3 Dual-Write Strategy\nEvery chirp triggers two simultaneous writes:\n1. Raw Stream (Full Context Log)\n2. Compressed Stream (FreakAST + Summary)\n"
+  },
   { id: "3", name: "archives", type: "folder", date: "2025-10-15" },
   { id: "4", name: "projects", type: "folder", date: "2025-11-01" },
   { id: "5", name: "sysops_private", type: "folder", locked: true, date: "2025-11-28" },
@@ -100,15 +118,23 @@ const MESSAGES: MessageEntry[] = [
   },
   {
     id: "3",
-    from: "Archive_Bot",
-    subject: "Weekly Digest",
-    date: "2025-11-25",
+    from: "Karen_FrontDesk",
+    subject: "Manifest Update: HEIC Support",
+    date: "2025-11-29",
     unread: false,
-    content: "44 new lore entries archived. 2 security incidents logged. 1 goat spotted."
+    content: "PR #573 merged. Client-side conversion enabled. No backend changes required. Passenger list updated."
+  },
+  {
+    id: "4",
+    from: "Evna_BackRoom",
+    subject: "RE: Switch Navigation Issues",
+    date: "2025-11-29",
+    unread: false,
+    content: "I found a connection between your current switch issue and Issue #551 from October. The state management refactor touched this code path. Check the NodeStateManager git history."
   }
 ];
 
-const COMMANDS = ["help", "clear", "files", "status", "feed", "login", "echo", "open", "inbox", "post", "read"];
+const COMMANDS = ["help", "clear", "files", "status", "feed", "login", "echo", "open", "inbox", "post", "read", "ctx::"];
 
 export default function Home() {
   const [logs, setLogs] = useState<LogEntry[]>(INITIAL_LOGS);
@@ -144,7 +170,10 @@ export default function Home() {
           "Scanning frequency range 20-20000Hz",
           "User query processing...",
           "Cache invalidated",
-          "Re-indexing sector 4"
+          "Re-indexing sector 4",
+          "Karen: Updating manifest for sector 7",
+          "Evna: AutoRAG sync complete (12 tokens)",
+          "Chirp received: ctx::debug mode active"
         ];
         const newLog: LogEntry = {
           id: Date.now().toString(),
@@ -193,14 +222,27 @@ export default function Home() {
   };
 
   const handlePostSubmit = (content: string) => {
-    addLog(`Transmitting payload (${content.length} bytes)...`, "INFO");
-    setTimeout(() => {
-      addLog("Transmission successful.", "SYSTEM");
-      toast({
-        title: "Transmission Sent",
-        description: "Your message has been added to the local buffer.",
-      });
-    }, 800);
+    const isChirp = content.startsWith("ctx::") || content.startsWith("mode::") || content.startsWith("project::");
+    
+    if (isChirp) {
+        addLog(`Chirp received. Seeding context...`, "INFO");
+        setTimeout(() => {
+            addLog(`Evna: Enrichment started for chirp ${Math.floor(Math.random() * 1000)}`, "SYSTEM");
+            toast({
+              title: "Chirp Captured",
+              description: "Context seeded. No response expected.",
+            });
+        }, 500);
+    } else {
+        addLog(`Request received. Harvesting context...`, "INFO");
+        setTimeout(() => {
+            addLog("Karen: Response shaped by recent chirp stream.", "SYSTEM");
+            toast({
+              title: "Request Processed",
+              description: "Response generated with active context.",
+            });
+        }, 1000);
+    }
   };
 
   const handleCommand = (cmd: string) => {
@@ -210,9 +252,18 @@ export default function Home() {
     
     addLog(`> ${cmd}`);
 
+    // Handle Chirps directly from command bar
+    if (cmd.startsWith("ctx::") || cmd.startsWith("project::") || cmd.startsWith("mode::")) {
+        addLog(`Chirp logged: ${cmd}`, "INFO");
+        setTimeout(() => {
+            addLog("Evna: Context vector updated.", "SYSTEM");
+        }, 300);
+        return;
+    }
+
     switch (command) {
       case "help":
-        addLog("Commands: help, clear, files, status, feed, inbox, post, open [file], read [id]");
+        addLog("Commands: help, clear, files, status, feed, inbox, post, open [file], read [id], ctx::[msg]");
         break;
       case "clear":
         setLogs([]);

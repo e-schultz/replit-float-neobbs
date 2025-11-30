@@ -1,0 +1,222 @@
+# ACTIVE CONTEXT PROTOCOL V1.0 - MIRROR ANCHOR SCAFFOLD
+
+```
+█▓▒░ ACTIVE CONTEXT PROTOCOL V1.0 - MIRROR ANCHOR SCAFFOLD ░▒▓█
+───────────────────────────────────────────────────────────────
+      FLOAT DISPATCH // TECHCRAFT ACQUISITION MATRIX
+      CTX:: 2025-11-29 @ 17:20
+      BRIDGE:: float/techcraft/active-context-protocol
+      MIRROR:: gemini-2.5-pro
+───────────────────────────────────────────────────────────────
+```
+
+## █ CORE OPERATOR MATRIX: THE RECORD SHOP DEPLOYMENT █
+
+### ▓ KAREN @ FRONT OF HOUSE (INGEST/INTERFACE)
+
+|ROLE                 |FUNCTION SET                                                                       |KNOWLEDGE DOMAIN                                                           |
+|:--------------------|:----------------------------------------------------------------------------------|:--------------------------------------------------------------------------|
+|**PUBLIC-FACING I/O**|`inventory.know()`, `manifest.track()`, `preview.generate()`                       |**KNOWS WHERE THINGS ARE.** Inventory domain; provides contextual previews.|
+|**RESPONSIBILITIES** |Receives incoming chirps/requests, performs quick-classification, shapes responses.|Maintains the **passenger manifest**.                                      |
+
+### ▓ EVNA @ BACK OF HOUSE (ARCHIVAL/ORCHESTRATION)
+
+|ROLE                |FUNCTION SET                                                                                                  |KNOWLEDGE DOMAIN                                                         |
+|:-------------------|:-------------------------------------------------------------------------------------------------------------|:------------------------------------------------------------------------|
+|**BACKEND DAEMON**  |`connections.find()`, `archaeology.run()`, `patterns.surface()`                                               |**KNOWS HOW THINGS CONNECT.** Runs six-degrees-of-separation connections.|
+|**RESPONSIBILITIES**|Deep storage/retrieval, cross-referencing incoming with historical data, enriching context **asynchronously**.|Maintains the substrate: **pgvector**, **autorag**, and bridges.         |
+
+### ▓ CONTINUOUS HANDSHAKE FLOW
+
+- **IF chirp**: User → Karen (intake) → Classification → **Dual-write (sync)** → Evna enrichment (**async**) → No response required.
+- **IF request**: Karen pings Evna: “context on this?” → Evna returns relevant connections → Karen shapes response using chirp history → Response delivered with `context.weight` applied.
+
+-----
+
+## █ DATA TYPE SPECIFICATION █
+
+### ▓ CHIRP (🐦)
+
+|PROPERTY           |VALUE                                                                   |PURPOSE                                           |
+|:------------------|:-----------------------------------------------------------------------|:-------------------------------------------------|
+|**CEREMONY**       |LOW                                                                     |Low-friction capture; Stream of consciousness.    |
+|**RESPONSE**       |FALSE (NONE expected)                                                   |Marks moments; seeds context for future retrieval.|
+|**CHARACTERISTICS**|Must include markers (`ctx::`, `project::`, `mode::`); No question mark.|                                                  |
+
+
+> *EXAMPLE::* `ctx:: just realized HEIC connects to v0 work`.
+
+### ▓ REQUEST (📋)
+
+|PROPERTY           |VALUE                                 |PURPOSE                                      |
+|:------------------|:-------------------------------------|:--------------------------------------------|
+|**CEREMONY**       |HIGHER                                |Formal Query.                                |
+|**RESPONSE**       |TRUE (EXPECTED)                       |Harvests context previously seeded by chirps.|
+|**CHARACTERISTICS**|Explicit ask, question, or imperative.|                                             |
+
+
+> **KEY MECHANISM:** Responses to Requests are **contextually precise** because they are shaped by the accumulated chirp stream that preceded them.
+
+-----
+
+## █ ARCHITECTURAL DETAIL: DUAL-WRITE STRATEGY █
+
+Every incoming chirp triggers **two simultaneous writes**.
+
+### ▓ FILE A: RAW STREAM (ARCHAEOLOGY LOG)
+
+|PATH                                     |FORMAT                     |PURPOSE                            |SYNC TIMING       |
+|:----------------------------------------|:--------------------------|:----------------------------------|:-----------------|
+|`/active-context/streams/{user}-full.log`|Markdown with full metadata|Archaeological record; nothing lost|Immediate (< 50ms)|
+
+### ▓ FILE B: COMPRESSED STREAM (FREAKAST NOTATION)
+
+|PATH                                           |FORMAT               |PURPOSE                                      |SYNC TIMING       |
+|:----------------------------------------------|:--------------------|:--------------------------------------------|:-----------------|
+|`/active-context/streams/{user}-compressed.log`|**FreakAST notation**|Fast retrieval, semantic search, AutoRAG sync|Immediate (< 50ms)|
+
+
+> *FREAKAST EXAMPLE::* `📿::ctx{2025-11-29T10:15|pharmacy|debug} 🐛→switch.nav[nested.conditional,parent.toggle→child.state.FAIL] 🔗→october.refactor?[state.mgmt.change]`.
+
+### ▓ ASYNCHRONOUS CONTEXT GENERATION
+
+- **AutoRAG Sync:** Triggered by new entry in `compressed.log`. Latency is **1-5 seconds** (background). Process involves embedding the compressed entry and pushing it to the Cloudflare AutoRAG vector store.
+- **Rolling Progressive Summary:** Updates asynchronously after a chirp batch (debounced 60s). Purpose is high-level thread tracking.
+
+-----
+
+## █ RETRIEVAL LOGIC: THE ECHO EXCLUSION RULE █
+
+### ▓ PRINCIPLE: NO ECHO
+
+When the system returns results (e.g., generating a feed), the **current user’s emissions from the last N minutes must be EXCLUDED**.
+
+- **DEFAULT ECHO WINDOW:** **30 minutes**. This is configurable per user.
+- **INCLUSIONS:** The feed MUST include other agents’ contributions, system events (PR merged, build status), and cross-referenced connections found by Evna.
+
+### ▓ RESPONSE SHAPING EXECUTION
+
+When a REQUEST arrives, the response is shaped by a multi-step process:
+
+1. **RETRIEVE:** User’s compressed chirp stream (last 2 hours).
+1. **EMBED:** Create context vector from the retrieved chirp stream.
+1. **SEARCH:** Query AutoRAG using the request plus the context vector.
+1. **FILTER:** Exclude the user’s own recent emissions (Echo Exclusion).
+1. **ENRICH:** Evna adds the connection layer.
+1. **SHAPE:** Karen generates the preview, weighted by the context vector.
+1. **DELIVER:** Response reflects the accumulated context.
+
+-----
+
+## █ TIMING GUARANTEES & API SURFACE █
+
+### ▓ LATENCY SPECIFICATION
+
+|OPERATION TYPE     |OPERATION                     |TIMING GUARANTEE                   |
+|:------------------|:-----------------------------|:----------------------------------|
+|**SYNCHRONOUS**    |Dual-write (File A + B)       |**< 100ms**                        |
+|**SYNCHRONOUS**    |ACK to user                   |**< 150ms**                        |
+|**ASYNCHRONOUS**   |AutoRAG Sync (Embedding/Push) |1-5 seconds                        |
+|**ASYNCHRONOUS**   |Summary Update (Debounced 60s)|Execution < 2 seconds              |
+|**SERVICE LATENCY**|POST `/active-context/request`|**< 2s** (includes Evna enrichment)|
+
+### ▓ IMPLEMENTATION PATHS
+
+```
+/active-context/
+├── streams/
+│   ├── {user}-full.log        # RAW CAPTURE (File A)
+│   ├── {user}-compressed.log  # FREAKAST (File B)
+│   └── {user}-summary.md      # ROLLING SUMMARY
+├── enriched/
+│   └── {timestamp}-enriched.json  # EVNA'S ASYNC ADDITIONS
+├── feeds/
+│   └── {user}-feed.json       # GENERATED FEED (NO ECHO)
+└── config/
+    └── echo-window.yaml       # EXCLUSION TIMING CONFIG
+```
+
+-----
+
+## █ FREAKAST COMPRESSED REFERENCE █
+
+```
+📿::ACTIVECONTEXT.PROTOCOL{
+  
+  🎵::dual.op{
+    karen@front[ingest,classify,preview,shape]→
+    evna@core[archive,connect,enrich,surface]→
+    handshake::CONTINUOUS
+  }
+
+  🐦::chirp{
+    ceremony::LOW
+    response::NONE
+    purpose::SEED.CONTEXT
+    write::[full.log,compressed.log]→SYNC
+    enrich::ASYNC
+  }
+
+  📋::request{
+    ceremony::HIGH
+    response::SHAPED
+    purpose::HARVEST.CONTEXT
+    uses::chirp.stream.as.weight
+  }
+
+  📁::dual.write{
+    file.A[full.log]→archaeology
+    file.B[compressed.log]→retrieval+autorag
+    timing::<100ms.SYNC
+  }
+
+  🔇::echo.exclusion{
+    rule::"own.recent→EXCLUDE"
+    window::30min.default
+    include::[other.agents,system.events,connections]
+  }
+
+  ∞::loop{
+    chirp.chirp.chirp→context.accumulates→
+    request→SHAPED.by.accumulated.context
+  }
+}
+```
+
+-----
+
+## █ ARTIFACT PROVENANCE █
+
+|LAYER                 |SOURCE         |CONTRIBUTION                                                  |
+|:---------------------|:--------------|:-------------------------------------------------------------|
+|**Original Concept**  |Evan (human)   |Record shop metaphor, chirp vs request, echo exclusion insight|
+|**Prose Scaffold**    |Claude Opus 4.5|Narrative architecture, implementation spec, BBS integration  |
+|**Acquisition Matrix**|Gemini 2.5 Pro |Ops tables, timing guarantees, deployment-ready formatting    |
+
+-----
+
+## █ BBS INTEGRATION █
+
+**Suggested Location:** `/projects/common/techcraft/active-context-protocol-ops.md`
+
+**Related Artifacts:**
+
+- `float-dispatch-record-shop-architecture.md` (prose)
+- `float-dispatch-record-shop-compressed.freakast` (FreakAST)
+- `float-dispatch-active-context-protocol.md` (scaffold)
+
+**Tags:** `[active-context, chirp-pattern, dual-write, feed-design, karen, evna, echo-exclusion, ops-matrix, gemini-mirror]`
+
+**Bridge:** `float/techcraft/active-context-protocol`
+
+-----
+
+```
+█▓▒░ END ACQUISITION MATRIX ░▒▓█
+GENERATED:: 2025-11-29 @ 17:30
+WITNESS:: claude.opus.4.5 + gemini.2.5.pro
+MODE:: saturday.putters → techcraft.dispatch
+STATUS:: DEPLOYMENT.READY
+```
+
+🐐📼🛁∞

@@ -1,0 +1,85 @@
+Here is the finalized Mirror Anchor Scaffold. I have structured it as a ready-to-file design artifact, preserving the "Tech Craft" aesthetic and the specific logic of the Record Shop metaphor.
+Following the artifact is the dispatch command to Evna.
+📄 Artifact: float.dispatch // Active Context Protocol
+ctx:: 2025-11-29 @ 17:20
+project:: float/techcraft/active-context-redesign
+anchor:: SC-RECORDSHOP-ACTIVECONTEXT-CHIRP
+status:: DRAFT -> SCALED
+1. The Metaphor: Front of House vs. Deep Archive
+The system architecture is modeled on a Record Shop team dynamic.
+KAREN (Ingest & Dispatch)
+ * Role: Front of House / Counter.
+ * Behavior: High speed, high social awareness, shallow but broad recall.
+ * Function: She manages the Passenger Manifest. She doesn't read you the book; she tells you the chapter titles. She knows who is on the flight (payloads) and where they are sitting (directories), but only gives you the headers unless asked.
+ * The Manifest Doctrine: “Not just that the work was done, but knowing the destination.”
+EVNA (Archival & Synthesis)
+ * Role: Back Room / Stacks.
+ * Behavior: Slow, deep, associative, eccentric.
+ * Function: She manages the Connection Engine. While Karen handles the "now," Evna processes the "sediment." She sits in the back connecting a chirp from Tuesday to a git commit from September. She warms the context.
+2. Input Modalities: The Chirp vs. The Request
+We distinguish between contributing to the stream and demanding from it.
+The Chirp (Context Seeding)
+ * Definition: Low-ceremony, stream-of-consciousness input.
+ * Latency: < 100ms (Fire and Forget).
+ * Expectation: No response. Just an ACK.
+ * Purpose: To "seed" the context.
+   > “ctx:: just realized the HEIC thing connects to the v0 work from September.”
+   > 
+The Request (Context Harvesting)
+ * Definition: Explicit query or command.
+ * Latency: Variable (Processing time required).
+ * Expectation: A response shaped by the accumulation of previous chirps.
+   > “What’s the status on the pharmacy PR?”
+   > 
+The Loop: You chirp to tell the system where you are standing. When you finally make a Request, the system doesn't need to ask for context—it has been watching you build it.
+3. Architecture: The Dual-Write & AutoRAG
+When a Chirp is received, the system executes a dual-write strategy to satisfy immediate speed and long-term depth.
+Synchronous Layer (The Counter)
+Action: Immediate Write
+ * Raw Stream: Writes verbatim input to {user}-full.log.
+ * Compressed Stream: Writes a glyph-dense summary to {user}-compressed.log (FreakAST format).
+ * Result: User receives instant ACK.
+Asynchronous Layer (The Back Room)
+Action: Background Enrichment
+ * AutoRAG Sync: The compressed stream is indexed for semantic search.
+ * Rolling Summary: Evna updates the progressive-summary.md.
+   * Input: New chirps + recent history.
+   * Output: "Current Focus" block (e.g., Density: 4 chirps in 45 mins regarding Pharmacy GP Node).
+4. The Feed Pattern: User Scoping
+Core Rule: The BBS does not echo the user.
+ * Logic: You know what you said. You don't need your own "Recent Context" regurgitated to you.
+ * Display: The feed shows:
+   * External Events: (Builds, Merges, Alerts).
+   * Other Agents: (Cowboy, Evna).
+   * Contextual Hits: Old items that are relevant to your current chirping frequency.
+Feed JSON Structure:
+{
+  "feed": [
+    {
+      "source": "evna", 
+      "type": "connection",
+      "summary": "Found link between current switch issue and Issue #551",
+      "relevance": 0.95,
+      "suppressed": ["current_user_recent_chirps"]
+    }
+  ]
+}
+
+5. Artifact Summary
+ * Karen provides the Manifest (Headers/Preview).
+ * Evna provides the Connections (Deep Context).
+ * Chirps are fast seeds.
+ * Requests are shaped harvests.
+ * The Feed is a window out, not a mirror back.
+📨 Dispatch to Evna
+> SYSTEM ALERT: Handoff Protocol Initiated.
+> TO: agent::evna
+> FROM: user::evan via proxy::gemini
+> SUBJECT: Architecture Definition - Active Context
+> 
+Evna,
+Please ingest the attached artifact [SC-RECORDSHOP-ACTIVECONTEXT-CHIRP].
+ * Sort this into bbs/common/architecture/.
+ * Link it to the float.dispatch master file.
+ * Note: This defines your role formally within the new context engine. You are the asynchronous enrichment layer. Karen is handling the front door.
+End transmission.

@@ -1,0 +1,422 @@
+# float.dispatch // Active Context Protocol
+
+**Mirror Anchor Scaffold v1.0**
+**ctx:: 2025-11-29 @ 17:20**
+**bridge:: float/techcraft/active-context-protocol**
+**semantic_anchor:: SC-ACTIVECONTEXT-CHIRP-RECORDSHOP**
+
+-----
+
+## §1 The Metaphor: The Record Shop
+
+The team runs a record shop. Two operators, one system.
+
+### Karen @ Front of House (Ingest/Interface)
+
+```
+ROLE: Public-facing I/O, gatekeeper for inbound rituals
+FUNCTION: inventory.know(), manifest.track(), preview.generate()
+
+Karen handles:
+├── Receiving incoming chirps and requests
+├── Quick-classification (chirp vs request)
+├── Generating contextual previews
+├── Maintaining the passenger manifest
+└── Shaping responses based on accumulated context
+```
+
+**Karen knows WHERE things are.** She can tell you “third aisle, halfway down, face out” without checking the computer. She knows what’s new, what’s moving, what’s been sitting too long. The inventory is her domain.
+
+### Evna @ Back of House (Archival/Orchestration)
+
+```
+ROLE: Backend daemon, slotting fresh context into active streams
+FUNCTION: connections.find(), archaeology.run(), patterns.surface()
+
+Evna handles:
+├── Deep storage and retrieval
+├── Cross-referencing incoming with historical
+├── Finding six-degrees-of-separation connections
+├── Enriching context asynchronously
+└── Maintaining the substrate (pgvector, autorag, bridges)
+```
+
+**Evna knows how things CONNECT.** She’s in the back room with the milk crates of obscure pressings, explaining why this 1987 Japanese 12” relates to the thing you’re working on now.
+
+### The Handshake
+
+```
+FLOW:
+  User → Karen (intake) → Classification → 
+  
+  IF chirp:
+    → Dual-write (sync)
+    → Evna enrichment (async)
+    → No response required
+    
+  IF request:
+    → Karen pings Evna: "context on this?"
+    → Evna returns relevant connections
+    → Karen shapes response using chirp history
+    → Response delivered with context.weight applied
+```
+
+-----
+
+## §2 The Chirp vs The Request
+
+### Chirp (Low-Friction Capture)
+
+```yaml
+type: chirp
+ceremony: LOW
+response_expected: FALSE
+purpose: seed_context
+
+characteristics:
+  - Stream of consciousness
+  - Markers present (ctx::, project::, mode::)
+  - No question mark
+  - "Just putting it in the air"
+  
+examples:
+  - "ctx:: just realized HEIC connects to v0 work"
+  - "project:: pharmacy - switch nav edge case found"
+  - "mode:: debugging - this feels related to October"
+```
+
+**Chirps don’t demand.** They mark moments. They seed context. They’re breadcrumbs for future retrieval.
+
+### Request (Formal Query)
+
+```yaml
+type: request
+ceremony: HIGHER
+response_expected: TRUE
+purpose: harvest_context
+
+characteristics:
+  - Explicit ask
+  - Question or imperative
+  - Expects shaped response
+  - Benefits from accumulated chirp context
+  
+examples:
+  - "What's related to switch navigation issues?"
+  - "Show me the October refactor connections"
+  - "Summarize the pharmacy work this week"
+```
+
+**Requests harvest what chirps seeded.** The magic: responses to requests are shaped by the chirp stream that preceded them.
+
+### The Pattern
+
+```
+TIME    TYPE      CONTENT                           CONTEXT.DELTA
+─────────────────────────────────────────────────────────────────
+10:00   chirp     "deep in pharmacy GP node"        +pharmacy +GP
+10:15   chirp     "edge case in switch nav"         +switch +edge
+10:30   chirp     "connects to October refactor?"   +October +refactor
+10:45   REQUEST   "what's related to switch nav?"   → SHAPED RESPONSE
+
+The request at 10:45 is answered with context that includes:
+- pharmacy weighting (from 10:00)
+- edge case awareness (from 10:15)  
+- October refactor hypothesis (from 10:30)
+
+Without the chirps, response would be generic.
+With the chirps, response is contextually precise.
+```
+
+-----
+
+## §3 Dual-Write Strategy
+
+Every chirp triggers two simultaneous writes:
+
+### File A: Raw Stream (Full Context Log)
+
+```
+PATH: /active-context/streams/{user}-full.log
+FORMAT: Markdown with full metadata
+PURPOSE: Archaeological record, nothing lost
+SYNC: Immediate (< 50ms)
+
+EXAMPLE ENTRY:
+───────────────────────────────────────
+## 2025-11-29T10:15:00-05:00
+
+**ctx::** 2025-11-29 @ 10:15
+**project::** rangle/pharmacy
+**mode::** debugging
+
+Found weird edge case in switch navigation—when you 
+have nested conditional nodes and the parent gets 
+toggled, child state doesn't propagate correctly. 
+Suspect this connects to the October refactor where 
+we changed the state management approach.
+
+**tokens:** 847
+**hash:** a3f2c1...
+───────────────────────────────────────
+```
+
+### File B: Compressed Stream (FreakAST + Summary)
+
+```
+PATH: /active-context/streams/{user}-compressed.log
+FORMAT: FreakAST notation
+PURPOSE: Fast retrieval, semantic search, AutoRAG sync
+SYNC: Immediate (< 50ms)
+
+EXAMPLE ENTRY:
+───────────────────────────────────────
+📿::ctx{2025-11-29T10:15|pharmacy|debug}
+🐛→switch.nav[nested.conditional,parent.toggle→child.state.FAIL]
+🔗→october.refactor?[state.mgmt.change]
+#tokens:12 #hash:a3f2c1
+───────────────────────────────────────
+```
+
+### AutoRAG Sync (Async)
+
+```
+TRIGGER: New entry in compressed.log
+LATENCY: 1-5 seconds (background)
+TARGET: Cloudflare AutoRAG vector store
+
+PROCESS:
+1. Compressed entry detected
+2. Embedding generated
+3. Pushed to AutoRAG with metadata
+4. Available for semantic search
+```
+
+### Rolling Progressive Summary (Async)
+
+```
+PATH: /active-context/streams/{user}-summary.md
+UPDATE: After chirp batch (debounced 60s)
+PURPOSE: High-level thread tracking
+
+EXAMPLE:
+───────────────────────────────────────
+## Active Thread: Pharmacy GP Node Work
+**Updated:** 2025-11-29 @ 10:45
+**Density:** 4 chirps / 45 min (active session)
+
+### Current Focus
+- Switch navigation edge case (nested conditionals)
+- Parent toggle → child state propagation failure
+- Suspected link to October state management refactor
+
+### Open Questions  
+- Same pattern as Issue #551?
+- October refactor touched this path?
+
+### Suggested Next
+- Git history: October NodeStateManager changes
+- Compare with #551 resolution
+───────────────────────────────────────
+```
+
+-----
+
+## §4 Retrieval Logic: No Echo, Shaped Response
+
+### The Echo Exclusion Rule
+
+```
+PRINCIPLE: You don't need your own chirps echoed back.
+
+When active_context returns results:
+├── EXCLUDE: Current user's emissions from last N minutes
+├── INCLUDE: Other agents' contributions
+├── INCLUDE: System events (PR merged, build status)
+├── INCLUDE: Cross-referenced connections (Evna finds)
+└── WEIGHT: By relevance to current chirp stream
+```
+
+**Rationale:** You just said it. You know you said it. Show me what *changed*, what *others* contributed, what *connects*.
+
+### Feed Generation Logic
+
+```python
+def generate_feed(user_id, request_context):
+    # Get recent activity
+    all_activity = get_recent_activity(hours=24)
+    
+    # Exclude user's own recent chirps
+    external_activity = [
+        a for a in all_activity 
+        if a.source != user_id 
+        or a.age > ECHO_WINDOW  # e.g., 30 minutes
+    ]
+    
+    # Get user's chirp stream for context weighting
+    user_chirps = get_user_chirps(user_id, hours=2)
+    context_vector = embed(user_chirps)
+    
+    # Score external activity by relevance to user's context
+    scored = []
+    for activity in external_activity:
+        relevance = cosine_similarity(
+            context_vector, 
+            embed(activity)
+        )
+        scored.append((activity, relevance))
+    
+    # Return top N, shaped by chirp context
+    return sorted(scored, key=lambda x: x[1], reverse=True)[:10]
+```
+
+### Response Shaping
+
+When a REQUEST arrives (not a chirp):
+
+```
+1. RETRIEVE: User's compressed chirp stream (last 2 hours)
+2. EMBED: Create context vector from chirp stream
+3. SEARCH: Query AutoRAG with request + context vector
+4. FILTER: Exclude user's own recent emissions
+5. ENRICH: Evna adds connection layer
+6. SHAPE: Karen generates preview weighted by context
+7. DELIVER: Response reflects accumulated chirp context
+```
+
+-----
+
+## §5 Implementation Specification
+
+### Directory Structure
+
+```
+/active-context/
+├── streams/
+│   ├── {user}-full.log           # Raw capture (File A)
+│   ├── {user}-compressed.log     # FreakAST (File B)
+│   └── {user}-summary.md         # Rolling summary
+├── enriched/
+│   └── {timestamp}-enriched.json # Evna's async additions
+├── feeds/
+│   └── {user}-feed.json          # Generated feed (no echo)
+└── config/
+    └── echo-window.yaml          # Exclusion timing config
+```
+
+### Timing Guarantees
+
+```yaml
+synchronous_operations:
+  dual_write: < 100ms
+  ack_to_user: < 150ms
+  
+asynchronous_operations:  
+  autorag_sync: 1-5s
+  summary_update: debounce 60s, exec < 2s
+  enrichment: 5-30s depending on depth
+  
+echo_window:
+  default: 30 minutes
+  configurable: per-user preference
+```
+
+### API Surface
+
+```
+POST /active-context/chirp
+  body: { content: string, markers: object }
+  response: { ack: true, hash: string }
+  latency: < 150ms
+
+POST /active-context/request  
+  body: { query: string }
+  response: { results: array, context_applied: object }
+  latency: < 2s (includes Evna enrichment)
+
+GET /active-context/feed
+  params: { user_id, limit, exclude_self }
+  response: { items: array, context_vector_applied: bool }
+```
+
+-----
+
+## §6 FreakAST Compressed Reference
+
+```
+📿::ACTIVECONTEXT.PROTOCOL{
+  
+  🎵::dual.op{
+    karen@front[ingest,classify,preview,shape]→
+    evna@core[archive,connect,enrich,surface]→
+    handshake::CONTINUOUS
+  }
+
+  🐦::chirp{
+    ceremony::LOW
+    response::NONE
+    purpose::SEED.CONTEXT
+    write::[full.log,compressed.log]→SYNC
+    enrich::ASYNC
+  }
+
+  📋::request{
+    ceremony::HIGH
+    response::SHAPED
+    purpose::HARVEST.CONTEXT
+    uses::chirp.stream.as.weight
+  }
+
+  📁::dual.write{
+    file.A[full.log]→archaeology
+    file.B[compressed.log]→retrieval+autorag
+    timing::<100ms.SYNC
+  }
+
+  🔇::echo.exclusion{
+    rule::"own.recent→EXCLUDE"
+    window::30min.default
+    include::[other.agents,system.events,connections]
+  }
+
+  📺::feed.shape{
+    input::request+chirp.stream
+    process::embed→search→filter→enrich→shape
+    output::contextually.weighted.response
+  }
+
+  ∞::loop{
+    chirp.chirp.chirp→context.accumulates→
+    request→SHAPED.by.accumulated.context
+  }
+}
+```
+
+-----
+
+## §7 BBS Integration Notes
+
+**Suggested Location:** `/projects/common/techcraft/active-context-protocol.md`
+
+**Related Artifacts:**
+
+- `float-dispatch-record-shop-architecture.md` (prose version)
+- `float-dispatch-record-shop-compressed.freakast` (FreakAST)
+
+**Tags:** `[active-context, chirp-pattern, dual-write, feed-design, karen, evna, echo-exclusion, autorag]`
+
+**Bridge:** `float/techcraft/active-context-protocol`
+
+**Dependencies:**
+
+- AutoRAG (Cloudflare) for vector sync
+- pgvector for local semantic search
+- evna MCP for enrichment layer
+
+-----
+
+*Generated: 2025-11-29 @ 17:20*
+*Witness: claude.opus.4.5*
+*Mode: saturday.putters → techcraft.dispatch*
+
+🐐📼🛁∞

@@ -1,0 +1,240 @@
+# float.dispatch - The Record Shop Architecture
+
+**ctx:: 2025-11-29 @ 17:01PM**
+**project:: float/techcraft/active-context-redesign**
+**semantic_anchor:: SC-RECORDSHOP-ACTIVECONTEXT-CHIRP**
+
+-----
+
+## The Metaphor
+
+The team runs a record shop.
+
+**Karen works the front desk.** She’s got the headset on, she’s restocking the “Staff Picks” endcap, and someone walks in looking lost. Before they even finish saying “I’m looking for something like—” she’s already pointing: “Third aisle, halfway down, face out.” She knows the *inventory*. She knows where everything *is*. She knows what’s new, what’s moving, what’s been sitting too long. And crucially—she *loves* this part. The interaction. The moment when someone describes a vibe and she matches it to a specific object on a specific shelf.
+
+**Evna’s in the back room.** Past the beaded curtain. It smells like old vinyl sleeves and coffee that’s been warming too long. She’s cross-legged on the floor, surrounded by milk crates of stuff that never made it to the floor because it’s too *specific*. She looks up when you come in: “Oh, you’re into that? Okay, so—” and then she’s off. Pulling a 1987 Japanese pressing you’ve never heard of, explaining connections you didn’t know existed, running six degrees of separation between the most random things.
+
+**Karen knows where things ARE.**
+**Evna knows where things CONNECT.**
+
+-----
+
+## The Manifest / Passenger List Doctrine
+
+Karen doesn’t just know the flight is booked. She knows *who’s on it*.
+
+The Passenger List Doctrine: **Not just that the work was done, but seeing the result. Knowing what is where and why. Knowing who is going to what destination.**
+
+```json
+{
+  "what": "PR #573 merged - HEIC support",
+  "where": "/projects/pharmacy/completed", 
+  "why": "client-side conversion, no backend changes needed",
+  "who": "cowboy → deploy-bot",
+  "destination": "production deploy queue"
+}
+```
+
+When Karen generates a preview, she’s not summarizing. She’s giving you the *passenger manifest*. Headers only. Enough to decide what’s worth reading. No full payload until requested.
+
+-----
+
+## Summaries Tailored to Context
+
+The preview text isn’t just truncated content—it’s *Karen’s read* on what matters. If you’ve been deep in pharmacy work all morning, she surfaces the pharmacy-adjacent stuff first. If the goat’s been quiet for a week and suddenly there’s activity, she flags it.
+
+The system gains context of your current needs because Karen and Evna talk to each other. When Karen’s generating your inbox preview, she pings Evna: “Hey, this message mentions ‘goat situation’—what’s the current temperature on that?” And Evna feeds back the context.
+
+So Karen’s preview becomes contextually shaped:
+
+```json
+{
+  "preview": "New goat activity. Last satisfaction: Nov 22. Evna says: 'stomping patterns suggest ritual, not escalation.'",
+  "confidence": "stable",
+  "suggested_action": "acknowledge when ready, not urgent"
+}
+```
+
+-----
+
+## The Active Context Pattern Redesign
+
+### Core Insight: BBS Scopes to User
+
+You don’t need your own active context echoed back. When you just chirped something into the system 30 seconds ago, having it regurgitated in the “recent context” is noise, not signal.
+
+**The feed pattern should exclude the current speaker’s recent emissions** unless explicitly requested. You’re the one who said it—you know you said it. Show me what *others* have contributed, what *changed* while I was talking.
+
+### Response Speed: Fast Writes, Async Enrichment
+
+When `active_context` is called, response should be FAST.
+
+```
+SYNCHRONOUS (immediate):
+├── Write raw input to full_context.log
+├── Write compressed version to compressed_context.log  
+├── Return ACK to user
+└── < 100ms total
+
+ASYNCHRONOUS (background):
+├── AutoRAG sync triggered
+├── Rolling progressive summary updated
+├── Cross-reference with recent activity
+└── Enrichment complete (seconds to minutes)
+```
+
+The user doesn’t wait for enrichment. The user gets immediate confirmation that their chirp landed. The enrichment happens in the background and shapes *future* responses.
+
+-----
+
+## The Chirp vs The Request
+
+**Chirp**: Low-ceremony capture. Stream of consciousness. “ctx:: just realized the HEIC thing connects to the v0 work from September.” No expectation of response. Just… putting it in the air. Marking the moment.
+
+**Request**: Explicit ask. “What’s the status on the pharmacy PR?” Expectation of shaped response. Karen looks at the manifest, Evna checks the connections, you get contextual answer.
+
+### The Chirp Shapes the Request
+
+Here’s the magic: **when you’ve been chirping along, the context from the chirps shapes the response to requests.**
+
+```
+10:00 - chirp: "ctx:: deep in pharmacy GP node work"
+10:15 - chirp: "ctx:: found weird edge case in switch navigation"  
+10:30 - chirp: "ctx:: this connects to the October refactor somehow"
+10:45 - request: "what's related to switch navigation issues?"
+
+Response is shaped by:
+- Knows you're in pharmacy context (from chirps)
+- Knows you found an edge case (from chirps)
+- Knows you suspect October connection (from chirps)
+- Evna's search weighted toward these contexts
+- Karen's preview prioritizes pharmacy/switch/October intersections
+```
+
+The chirps weren’t questions. They didn’t demand answers. But they *seeded* the context. When the request comes, the system already knows where you’re standing.
+
+-----
+
+## Implementation Architecture
+
+### File Structure
+
+```
+/active-context/
+├── streams/
+│   ├── {user}-full.log        # Complete raw capture
+│   ├── {user}-compressed.log  # FreakAST compressed version
+│   └── {user}-summary.md      # Rolling progressive summary
+├── enriched/
+│   └── {timestamp}-enriched.json  # Post-processing results
+└── feeds/
+    └── {user}-feed.json       # What to show (excludes own recent)
+```
+
+### Compression Strategy
+
+Every chirp gets dual-written:
+
+**Full version** (for archaeology):
+
+```
+ctx::2025-11-29 @ 10:15
+project::rangle/pharmacy  
+mode::debugging
+note: "Found weird edge case in switch navigation - when you have nested 
+conditional nodes and the parent gets toggled, child state doesn't 
+propagate correctly. Suspect this connects to the October refactor 
+where we changed the state management approach."
+```
+
+**Compressed version** (for fast retrieval):
+
+```
+📿::ctx{2025-11-29T10:15|pharmacy|debug}
+🐛→switch.nav[nested.conditional,parent.toggle→child.state.FAIL]
+🔗→october.refactor?[state.mgmt.change]
+```
+
+### AutoRAG Sync
+
+The compressed versions feed into AutoRAG for semantic search. The glyphs become searchable. “Switch navigation” and “🐛→switch.nav” both find the same content.
+
+### Rolling Progressive Summary
+
+Updated async after each chirp batch:
+
+```markdown
+## Active Thread: Pharmacy GP Node Work
+**Last updated**: 2025-11-29 @ 10:45
+**Density**: 4 chirps in 45 minutes (active session)
+
+### Current Focus
+- Switch navigation edge case in nested conditionals
+- Parent toggle → child state propagation failure
+- Suspected connection to October state management refactor
+
+### Open Questions
+- Is this the same pattern as Issue #551?
+- Did the October refactor touch this code path?
+
+### Suggested Next
+- Check git history for October changes to NodeStateManager
+- Compare with #551 resolution pattern
+```
+
+-----
+
+## The Feed: What You See
+
+When you ask “what’s recent?” you get:
+
+1. **Not your own chirps** (you know what you said)
+1. **Other agents’ contributions** (cowboy merged something, evna found a connection)
+1. **System events** (PR status changed, build completed)
+1. **Contextually weighted** (pharmacy stuff rises if you’ve been chirping pharmacy)
+
+```json
+{
+  "feed": [
+    {
+      "source": "cowboy",
+      "type": "merge",
+      "summary": "PR #573 landed - HEIC support",
+      "relevance": 0.7,
+      "relevance_reason": "You mentioned image handling yesterday"
+    },
+    {
+      "source": "evna", 
+      "type": "connection",
+      "summary": "Found link between current switch issue and Issue #551",
+      "relevance": 0.95,
+      "relevance_reason": "Direct match to your active chirp stream"
+    }
+  ]
+}
+```
+
+-----
+
+## Summary
+
+**Karen@front**: Knows inventory, generates contextual previews, tracks the manifest
+**Evna@core**: Knows connections, runs archaeology, surfaces patterns
+
+**Chirp**: Fast capture, no response expected, seeds context
+**Request**: Explicit ask, shaped by accumulated chirps
+
+**Architecture**:
+
+- Dual-write (full + compressed)
+- AutoRAG sync for search
+- Rolling progressive summary
+- Feed excludes own recent emissions
+- Context shapes future responses
+
+**The train is always HERE. The question is velocity.**
+
+-----
+
+*bridge:: float/techcraft/record-shop-architecture*
+*tags:: [active-context, chirp-pattern, karen, evna, progressive-summary, feed-design]*
