@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Command, CornerDownLeft, ChevronsRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface CommandBarProps {
   onCommand: (cmd: string) => void;
@@ -56,6 +57,11 @@ export const CommandBar = ({ onCommand, suggestions = [] }: CommandBarProps) => 
     }
   };
 
+  const handleSuggestionClick = (cmd: string) => {
+    setInput(cmd + " ");
+    inputRef.current?.focus();
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
@@ -64,7 +70,33 @@ export const CommandBar = ({ onCommand, suggestions = [] }: CommandBarProps) => 
   };
 
   return (
-    <div className="w-full mt-auto pt-4 pb-2">
+    <div className="w-full mt-auto pt-4 pb-2 relative">
+      {/* Command Suggestions Panel */}
+      <AnimatePresence>
+        {isFocused && !input && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            transition={{ duration: 0.15 }}
+            className="absolute bottom-full left-0 right-0 mb-2 px-2"
+          >
+            <div className="bg-card/90 border border-border backdrop-blur-md p-2 shadow-lg flex flex-wrap gap-2">
+               <div className="w-full text-[10px] text-muted-foreground uppercase tracking-wider mb-1 px-1">Available Commands</div>
+               {suggestions.map((cmd) => (
+                 <button
+                   key={cmd}
+                   onClick={() => handleSuggestionClick(cmd)}
+                   className="px-3 py-1.5 bg-primary/5 hover:bg-primary/20 border border-primary/20 hover:border-primary text-primary font-mono text-xs md:text-sm transition-colors rounded-sm"
+                 >
+                   {cmd}
+                 </button>
+               ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <form 
         onSubmit={handleSubmit}
         className={cn(
@@ -94,7 +126,10 @@ export const CommandBar = ({ onCommand, suggestions = [] }: CommandBarProps) => 
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
+            onBlur={() => {
+                // Small delay to allow click events on suggestions to fire before hiding
+                setTimeout(() => setIsFocused(false), 150);
+            }}
             className="w-full bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground font-mono text-base md:text-lg relative z-10 p-0"
             placeholder="Enter command..."
             autoComplete="off"
